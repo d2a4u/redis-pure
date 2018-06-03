@@ -34,44 +34,30 @@ case object RESPStream extends RESP
 
 case object REPong extends RESP
 
-case class REStreamId(
-  millis: Long,
-  increment: Int
-) extends RESP {
+case class REStreamId(millis: Long, increment: Int) extends RESP {
   val id: String = s"$millis-$increment"
 }
 
-case class REInt(
-  value: Int
-) extends RESP
+case class REInt(value: Int) extends RESP
 
-case class REError(
-  `type`: String,
-  message: String
-) extends RESP
+case class REError(`type`: String, message: String) extends RESP
 
 sealed trait REBulkString extends RESP
 
 case object RENullString extends REBulkString
 
-case class REString(
-  value: String
-) extends REBulkString
+case class REString(value: String) extends REBulkString
 
 case object RESimpleString extends RESP
 
 sealed trait REArray extends RESP
 
-case class RENeArray(
-  elems: Array[RESP]
-) extends REArray
+case class RENeArray(elems: Array[RESP]) extends REArray
 
 case object RENullArray extends REArray
 
 object REArray {
-  def apply(items: String*): REArray = RENeArray(
-    items.toArray.map(REString.apply)
-  )
+  def apply(items: String*): REArray = RENeArray(items.toArray.map(REString.apply))
 }
 
 class RESPParser(val input: ParserInput) extends Parser {
@@ -108,19 +94,25 @@ class RESPParser(val input: ParserInput) extends Parser {
     RESP.ErrorCharType ~ Word ~ ' ' ~ Words ~ CRLF ~> ((typ: String, msg: String) => push(REError(typ, msg)))
   }
 
-
   def RuleBulkString: Rule1[REBulkString] = rule {
     RESP.BulkStringCharType ~ '-' ~ '1' ~ CRLF ~ push(RENullString) |
-      RESP.BulkStringCharType ~ Digits ~ CRLF ~ Words ~ CRLF ~> ((num: Int, str: String) =>
-        test(num == str.getBytes(StandardCharsets.UTF_8).length) ~ push(REString(str)))
+      RESP.BulkStringCharType ~ Digits ~ CRLF ~ Words ~ CRLF ~> (
+        (
+          num: Int,
+          str: String
+        ) => test(num == str.getBytes(StandardCharsets.UTF_8).length) ~ push(REString(str))
+      )
   }
 
   def RuleArray: Rule1[REArray] = rule {
     RESP.ArrayCharType ~ '-' ~ CRLF ~ push(RENullArray) |
-      RESP.ArrayCharType ~ Digits ~ CRLF ~ RuleRESPRepeats ~> ((num: Int, resps: Seq[RESP]) =>
-        test(num == resps.size) ~ push(RENeArray(resps.toArray)))
+      RESP.ArrayCharType ~ Digits ~ CRLF ~ RuleRESPRepeats ~> (
+        (
+          num: Int,
+          resps: Seq[RESP]
+        ) => test(num == resps.size) ~ push(RENeArray(resps.toArray))
+      )
   }
-
 
   def RuleRESP: Rule1[RESP] = rule(RuleBulkString | RuleInteger | RuleArray)
 

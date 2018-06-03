@@ -9,8 +9,6 @@ case class Ping[F[_]](implicit client: RedisClient, F: Effect[F]) extends BasicR
   override val cmd: REArray = REArray("PING")
 }
 
-case class Del[F[_]](
-  keys: String*
-)(implicit client: RedisClient, F: Effect[F]) extends BasicRESPCmd[F, REInt] {
+case class Del[F[_]](keys: String*)(implicit client: RedisClient, F: Effect[F]) extends BasicRESPCmd[F, REInt] {
   override val cmd: REArray = RENeArray(Array(REString("DEL")) ++ keys.map(REString.apply))
 }

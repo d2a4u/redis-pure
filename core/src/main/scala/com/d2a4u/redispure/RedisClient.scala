@@ -18,21 +18,13 @@ case class RedisClient(
 )(implicit AG: AsynchronousChannelGroup, ec: ExecutionContext) {
 
   sealed trait TypeByte
-  case class NonEmptySimpleTypeByte(
-    index: Int,
-    value: Byte
-  ) extends TypeByte
-  case class NonEmptyArrayTypeByte(
-    index: Int
-  ) extends TypeByte
+  case class NonEmptySimpleTypeByte(index: Int, value: Byte) extends TypeByte
+  case class NonEmptyArrayTypeByte(index: Int) extends TypeByte
   case object EmptyTypeByte extends TypeByte
 
   val CRLF: Array[Byte] = Array(13, 10)
 
-  def send[F[_]](
-    cmd: String,
-    bufferSize: Int = 128 * 1024
-  )(implicit F: Effect[F]): Stream[F, Chunk[Byte]] = {
+  def send[F[_]](cmd: String, bufferSize: Int = 128 * 1024)(implicit F: Effect[F]): Stream[F, Chunk[Byte]] = {
     for {
       address <- Stream(new InetSocketAddress(host, port))
       sock <- tcp.client[F](address)
@@ -42,11 +34,14 @@ case class RedisClient(
     } yield values
   }
 
-  private def write[F[_]](socket: Socket[F], cmd: String): Stream[F, Unit] = {
+  private def write[F[_]](socket: Socket[F], cmd: String): Stream[F, Unit] =
     Stream.eval(socket.write(Chunk.array(cmd.getBytes)))
-  }
 
-  private def readAll[F[_]](socket: Socket[F], firstLine: Chunk[Byte], bufferSize: Int = 128 * 1024): Stream[F, Chunk[Byte]] = {
+  private def readAll[F[_]](
+    socket: Socket[F],
+    firstLine: Chunk[Byte],
+    bufferSize: Int = 128 * 1024
+  ): Stream[F, Chunk[Byte]] = {
     extractTypeByte(firstLine) match {
       case NonEmptySimpleTypeByte(typeByteAt, charByte) =>
         readSimple(socket, firstLine, bufferSize)(typeByteAt, charByte)
@@ -57,7 +52,10 @@ case class RedisClient(
     }
   }
 
-  private def readSimple[F[_]](socket: Socket[F], firstLine: Chunk[Byte], bufferSize: Int)(index: Int, byte: Byte): Stream[F, Chunk[Byte]] = {
+  private def readSimple[F[_]](socket: Socket[F], firstLine: Chunk[Byte], bufferSize: Int)(
+    index: Int,
+    byte: Byte
+  ): Stream[F, Chunk[Byte]] = {
     val numBytes = numberOfBytesToReadNext(firstLine)(index, byte)
     val readNext = {
       if (numBytes == 0) Stream(Chunk.empty).covary[F]
@@ -69,8 +67,8 @@ case class RedisClient(
   private def readArray[F[_]](socket: Socket[F], firstLine: Chunk[Byte], bufferSize: Int): Stream[F, Chunk[Byte]] = {
     val numElems = numberOfElemsToReadNext(firstLine)
     val readNext = if (numElems > 0) {
-      val readElem: Pipe[F, Int, Chunk[Byte]] = {
-        in => in.flatMap { _ =>
+      val readElem: Pipe[F, Int, Chunk[Byte]] = { in =>
+        in.flatMap { _ =>
           for {
             line <- nextLine(socket)
             values <- readAll(socket, line, bufferSize)
@@ -118,8 +116,7 @@ case class RedisClient(
     val read = {
       if (bufferSize > numBytes) {
         Stream.eval(socket.readN(numBytes))
-      }
-      else {
+      } else {
         Stream.eval(socket.readN(bufferSize)).repeat.take(numBytes)
       }
     }
