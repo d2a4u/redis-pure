@@ -18,10 +18,7 @@ trait FSteam[F[_]] {
 trait RESPCmd[Out <: RESP] {
   def send[F[_]](
     request: REArray
-  )(implicit encoder: Encoder[REArray],
-    client: RedisClient,
-    F: Effect[F]
-  ): F[Either[Throwable, Out]] = {
+  )(implicit encoder: Encoder[REArray], client: RedisClient, F: Effect[F]): F[Either[Throwable, Out]] = {
     encoder.encode(request) match {
       case Right(cmd) =>
         val response = client.send[F](cmd).compile.toList
@@ -34,9 +31,8 @@ trait RESPCmd[Out <: RESP] {
     }
   }
 
-  def sendStream[F[_]](
-    request: REArray
-  )(implicit encoder: Encoder[REArray],
+  def sendStream[F[_]](request: REArray)(
+    implicit encoder: Encoder[REArray],
     client: RedisClient,
     F: Effect[F]
   ): Either[SerializationException, Stream[F, Chunk[Byte]]] = {
@@ -50,10 +46,11 @@ trait RESPCmd[Out <: RESP] {
   }
 }
 
-abstract class BasicRESPCmd[F[_], Out <: RESP](implicit client: RedisClient, F: Effect[F]) extends RESPCmd[Out] with FRun[F, Out] {
+abstract class BasicRESPCmd[F[_], Out <: RESP](implicit client: RedisClient, F: Effect[F])
+    extends RESPCmd[Out]
+    with FRun[F, Out] {
   def cmd: REArray
 
-  override def run(): F[Either[Throwable, Out]] = {
+  override def run(): F[Either[Throwable, Out]] =
     send[F](cmd)
-  }
 }

@@ -16,4 +16,5 @@ libraryDependencies ++= Seq(
 
 parallelExecution in Test := false
 
+scalafmtOnCompile := true
 scalacOptions += "-Ypartial-unification"
