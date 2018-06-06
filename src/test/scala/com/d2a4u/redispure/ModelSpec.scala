@@ -56,10 +56,14 @@ class ModelSpec extends FlatSpec with Matchers with EitherValues {
 
   it should "parse Error" in {
     new RESPParser("-ERR unknown command 'foobar'\r\n").ErrorInput.run().resultType[REError]
-    new RESPParser("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n").ErrorInput.run().resultType[REError]
+    new RESPParser("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n").ErrorInput
+      .run()
+      .resultType[REError]
 
     new RESPParser("00000000-ERR unknown command 'foobar'\r\n").ErrorInput.run().resultType[REError]
-    new RESPParser("00000000-WRONGTYPE Operation against a key holding the wrong kind of value\r\n").ErrorInput.run().resultType[REError]
+    new RESPParser("00000000-WRONGTYPE Operation against a key holding the wrong kind of value\r\n").ErrorInput
+      .run()
+      .resultType[REError]
   }
 
   it should "parse Array" in {
