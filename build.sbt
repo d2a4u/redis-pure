@@ -1,6 +1,6 @@
-name := "redis-pure"
+import sbtrelease.ReleaseStateTransformations._
 
-version := "0.1.0-SNAPSHOT"
+name := "redis-pure"
 
 scalaVersion := "2.12.6"
 
@@ -15,6 +15,21 @@ libraryDependencies ++= Seq(
 )
 
 parallelExecution in Test := false
+
+releaseProcess := Seq[ReleaseStep](
+  runClean,
+  runTest,
+  checkSnapshotDependencies,
+  inquireVersions,
+  setReleaseVersion,
+  commitReleaseVersion,
+  publishArtifacts,
+  setNextVersion,
+  commitNextVersion,
+  pushChanges
+)
+
+releaseCommitMessage := s"Setting version to ${(version in ThisBuild).value} [ci skip]"
 
 scalafmtOnCompile := true
 scalacOptions += "-Ypartial-unification"
