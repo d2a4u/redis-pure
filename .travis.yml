@@ -1,18 +1,16 @@
 sudo: required
 language: scala
-matrix:
-  include:
-  - env: SBT_VERSION="1.1.4"
-    jdk: oraclejdk8
 scala:
-  - 2.12.6
+- 2.12.6
 cache:
   directories:
   - "$HOME/.ivy2/"
   - "$HOME/.sbt/"
 services:
-  - redis-server
-script:
-  - sbt "^^ ${SBT_VERSION}" test
-before_cache:
-  - find $HOME/.ivy2 -name "ivydata-*.properties" -delete
+- redis-server
+jobs:
+  include:
+  - stage: test
+    script:
+    - sbt "^^ 1.1.4" clean update test
+    jdk: oraclejdk8
