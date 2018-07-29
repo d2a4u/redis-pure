@@ -1,0 +1,44 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/openjdk:8-jdk
+      - image: redis/4.0.10
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+          - v1-dependencies-{{ checksum "build.sbt" }}
+          - v1-dependencies-
+      - run: cat /dev/null | sbt clean update compile
+      - save_cache:
+          paths:
+            - ~/.m2
+          key: v1-dependencies--{{ checksum "build.sbt" }}
+      - run: cat /dev/null | sbt test
+  publish:
+    working_directory: ~/repo
+    docker:
+    - image: circleci/openjdk:8-jdk
+    steps:
+    - attach_workspace:
+        at: ~/repo
+    - restore_cache:
+        keys:
+        - v1-dependencies-{{ checksum "build.sbt" }}
+        - v1-dependencies-
+    - run:
+        command: sbt release
+
+workflows:
+  version: 2
+  build_test_release:
+    jobs:
+    - build
+    - release:
+        requires:
+        - build
+        filters:
+          branches:
+            only: master
