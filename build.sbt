@@ -2,7 +2,11 @@ import sbtrelease.ReleaseStateTransformations._
 
 name := "redis-pure"
 
+organization in ThisBuild := "io.redis-pure"
+
 scalaVersion := "2.12.6"
+
+licenses += ("MIT", url("http://opensource.org/licenses/MIT"))
 
 libraryDependencies ++= Seq(
   "org.typelevel" %% "cats-core" % "1.1.0",
