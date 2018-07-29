@@ -3,7 +3,7 @@ jobs:
   build:
     docker:
       - image: circleci/openjdk:8-jdk
-      - image: redis/4.0.10
+      - image: redis:4.0.10-alpine3.8
     working_directory: ~/repo
     steps:
       - checkout
@@ -20,7 +20,8 @@ jobs:
   publish:
     working_directory: ~/repo
     docker:
-    - image: circleci/openjdk:8-jdk
+      - image: circleci/openjdk:8-jdk
+      - image: redis:4.0.10-alpine3.8
     steps:
     - attach_workspace:
         at: ~/repo
