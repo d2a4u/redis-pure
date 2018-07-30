@@ -37,7 +37,7 @@ workflows:
   build_test_release:
     jobs:
     - build
-    - release:
+    - publish:
         requires:
         - build
         filters:
