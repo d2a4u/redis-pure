@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/d2a4u/redis-pure.svg?branch=master)](https://travis-ci.org/d2a4u/redis-pure)
 
-Redis Pure is an experimental redis client based on [FS2](https://github.com/functional-streams-for-scala/fs2)
+Redis Pure is an redis client based on [FS2](https://github.com/functional-streams-for-scala/fs2)
 and [cats-effect](https://github.com/typelevel/cats-effect).
 The goal is to prodive non-blocking IO actions on Redis store but be flexible on
 IO data type.
@@ -38,7 +38,7 @@ For example:
 - Using `cats.effect.IO`:
     ```scala
     val cmd1 = Ping[IO]()
-    cmd1.run.unsafeRunSync()
+    cmd1.run().unsafeRunSync()
     // Right(REPong)
     ```
 

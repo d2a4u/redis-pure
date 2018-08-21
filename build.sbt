@@ -36,4 +36,9 @@ releaseProcess := Seq[ReleaseStep](
 releaseCommitMessage := s"Setting version to ${(version in ThisBuild).value} [ci skip]"
 
 scalafmtOnCompile := true
-scalacOptions += "-Ypartial-unification"
+
+scalacOptions ++= Seq(
+  "-feature",
+  "-language:higherKinds",
+  "-Ypartial-unification"
+)

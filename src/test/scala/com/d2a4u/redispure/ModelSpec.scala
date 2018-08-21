@@ -1,6 +1,5 @@
 package com.d2a4u.redispure
 
-import com.d2a4u.redispure.models._
 import com.d2a4u.redispure.resp._
 import com.d2a4u.redispure.serialization.Encoder
 import org.scalatest.{EitherValues, FlatSpec, Matchers}
@@ -85,8 +84,8 @@ class ModelSpec extends FlatSpec with Matchers with EitherValues {
   }
 
   "Encoder" should "encode REInt" in {
-    val encoder: Encoder[REInt] = Encoder()
+    val encoder = implicitly[Encoder[REInt]]
     val value = 1
-    encoder.encode(REInt(value)).right.value shouldEqual s":$value\r\n"
+    encoder.encode(REInt(value)) shouldEqual s":$value\r\n"
   }
 }

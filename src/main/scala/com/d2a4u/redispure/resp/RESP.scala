@@ -2,6 +2,7 @@ package com.d2a4u.redispure.resp
 
 import java.nio.charset.StandardCharsets
 
+import cats.Monoid
 import org.parboiled2._
 
 import scala.util.{Failure, Try}
@@ -58,6 +59,18 @@ case object RENullArray extends REArray
 
 object REArray {
   def apply(items: String*): REArray = RENeArray(items.toArray.map(REString.apply))
+
+  implicit val monoid: Monoid[REArray] = new Monoid[REArray] {
+    def empty: REArray = RENullArray
+    def combine(x: REArray, y: REArray): REArray = {
+      (x, y) match {
+        case (array1: RENeArray, array2: RENeArray) => RENeArray(array1.elems ++ array2.elems)
+        case (array1: RENeArray, RENullArray) => array1
+        case (RENullArray, array2: RENeArray) => array2
+        case _ => RENullArray
+      }
+    }
+  }
 }
 
 class RESPParser(val input: ParserInput) extends Parser {
