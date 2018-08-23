@@ -193,12 +193,9 @@ object Set {
     Set[F, String](key, value, None, false, false)
 }
 
-case class SetBit[F[_], T](key: String, offset: Int, value: T)(
-  implicit encoder: Encoder[T],
-  client: RedisClient[F],
-  F: Effect[F]
-) extends BasicRESPCmd[F, REInt] {
-  override val cmd: REArray = REArray("SETBIT", this.key, offset.toString, encoder.encode(value))
+case class SetBit[F[_]](key: String, offset: Int, value: Boolean)(implicit client: RedisClient[F], F: Effect[F])
+    extends BasicRESPCmd[F, REInt] {
+  override val cmd: REArray = REArray("SETBIT", this.key, offset.toString, { if (value) 1 else 0 }.toString)
 }
 
 case class SetEx[F[_], T](key: String, seconds: Int, value: T)(

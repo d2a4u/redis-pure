@@ -120,13 +120,18 @@ class StringCommandsSpec extends FlatSpec with Matchers with EitherValues with B
      *  redis>
      */
     val cmdResult = for {
-      _ <- RSet[IO]("key 1", "foobar").run()
-      _ <- RSet[IO]("key 2", "abcdef").run()
+      _ <- RSet[IO]("key1", "foobar").run()
+      _ <- RSet[IO]("key2", "abcdef").run()
       bitop <- BitOp[IO](BitOpAnd, "dest", "key1", "key2").run()
-    } yield bitop
+      result <- Get[IO]("dest").run()
+    } yield {
+      for {
+        op <- bitop
+        res <- result
+      } yield (op, res)
+    }
 
-    cmdResult.unsafeRunSync().right.value shouldEqual REInt(6)
-    Get[IO]("dest").run().unsafeRunSync().right.value shouldEqual REString("`bc`ab")
+    cmdResult.unsafeRunSync().right.value shouldEqual (REInt(6), REString("`bc`ab"))
   }
 
   "BITPOS command" should "return the position of the first bit set to 1 or 0 in a string" in {
@@ -146,23 +151,33 @@ class StringCommandsSpec extends FlatSpec with Matchers with EitherValues with B
      *  (integer) -1
      *  redis>
      */
+//    val cmdResult = for {
+////      _ <- RSet[IO]("mykey", """"\xff\xf0\x00"""").run()
+////      bitPos0 <- BitPos[IO]("mykey", 0).run()
+////      _ <- RSet[IO]("mykey", """\x00\xff\xf0""").run()
+////      bitPos10 <- BitPos[IO]("mykey", 1, Some(0)).run()
+////      bitPos12 <- BitPos[IO]("mykey", 1, Some(2)).run()
+////      _ <- RSet[IO]("mykey", """\x00\x00\x00""").run()
+////      bitPos1 <- BitPos[IO]("mykey", 1).run()
+////    } yield {
+////      for {
+////        bp0 <- bitPos0
+////        bp10 <- bitPos10
+////        bp12 <- bitPos12
+////        bp1 <- bitPos1
+////      } yield (bp0, bp10, bp12, bp1)
+////    }
     val cmdResult = for {
-      _ <- RSet[IO]("mykey", """\xff\xf0\x00""").run()
-      bitPos0 <- BitPos[IO]("mykey", 0).run()
-      _ <- RSet[IO]("mykey", """\x00\xff\xf0""").run()
-      bitPos10 <- BitPos[IO]("mykey", 1, Some(0)).run()
-      bitPos12 <- BitPos[IO]("mykey", 1, Some(2)).run()
-      _ <- RSet[IO]("mykey", """\x00\x00\x00""").run()
-      bitPos1 <- BitPos[IO]("mykey", 1).run()
+      _ <- SetBit[IO]("foo", 10, true).run()
+      _ <- SetBit[IO]("foo", 9, true).run()
+      _ <- SetBit[IO]("foo", 8, true).run()
+      get <- Get[IO]("foo").run()
     } yield {
-      for {
-        bp0 <- bitPos0
-        bp10 <- bitPos10
-        bp12 <- bitPos12
-        bp1 <- bitPos1
-      } yield (bp0, bp10, bp12, bp1)
+      get
     }
 
-    cmdResult.unsafeRunSync().right.value shouldEqual (REInt(12), REInt(8), REInt(16), REInt(-1))
+    println("$$$$$$$$$$$$")
+    throw cmdResult.unsafeRunSync().left.value
+    cmdResult.unsafeRunSync().right.value shouldEqual REInt(1)
   }
 }
