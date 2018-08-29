@@ -4,7 +4,7 @@ import java.nio.channels.AsynchronousChannelGroup
 import java.util.concurrent.Executors
 
 import cats.effect.IO
-import com.d2a4u.redispure.RedisClient
+import com.d2a4u.redispure.clients.AsyncRedisClient
 import com.d2a4u.redispure.commands.strings.{Set => RSet}
 import com.d2a4u.redispure.commands.server.FlushAll
 import com.d2a4u.redispure.resp.{REInt, RENeArray, REString}
@@ -16,7 +16,7 @@ class StringCommandsSpec extends FlatSpec with Matchers with EitherValues with B
   val RedisPort = 6379
   val es = Executors.newCachedThreadPool()
   implicit val acg = AsynchronousChannelGroup.withThreadPool(es)
-  implicit val client = RedisClient[IO]("localhost", RedisPort)
+  implicit val client = AsyncRedisClient[IO]("localhost", RedisPort)
 
   override def beforeEach(): Unit = {
     super.beforeEach()
@@ -132,52 +132,5 @@ class StringCommandsSpec extends FlatSpec with Matchers with EitherValues with B
     }
 
     cmdResult.unsafeRunSync().right.value shouldEqual (REInt(6), REString("`bc`ab"))
-  }
-
-  "BITPOS command" should "return the position of the first bit set to 1 or 0 in a string" in {
-    /*  redis> SET mykey "\xff\xf0\x00"
-     *  "OK"
-     *  redis> BITPOS mykey 0
-     *  (integer) 12
-     *  redis> SET mykey "\x00\xff\xf0"
-     *  "OK"
-     *  redis> BITPOS mykey 1 0
-     *  (integer) 8
-     *  redis> BITPOS mykey 1 2
-     *  (integer) 16
-     *  redis> set mykey "\x00\x00\x00"
-     *  "OK"
-     *  redis> BITPOS mykey 1
-     *  (integer) -1
-     *  redis>
-     */
-//    val cmdResult = for {
-////      _ <- RSet[IO]("mykey", """"\xff\xf0\x00"""").run()
-////      bitPos0 <- BitPos[IO]("mykey", 0).run()
-////      _ <- RSet[IO]("mykey", """\x00\xff\xf0""").run()
-////      bitPos10 <- BitPos[IO]("mykey", 1, Some(0)).run()
-////      bitPos12 <- BitPos[IO]("mykey", 1, Some(2)).run()
-////      _ <- RSet[IO]("mykey", """\x00\x00\x00""").run()
-////      bitPos1 <- BitPos[IO]("mykey", 1).run()
-////    } yield {
-////      for {
-////        bp0 <- bitPos0
-////        bp10 <- bitPos10
-////        bp12 <- bitPos12
-////        bp1 <- bitPos1
-////      } yield (bp0, bp10, bp12, bp1)
-////    }
-    val cmdResult = for {
-      _ <- SetBit[IO]("foo", 10, true).run()
-      _ <- SetBit[IO]("foo", 9, true).run()
-      _ <- SetBit[IO]("foo", 8, true).run()
-      get <- Get[IO]("foo").run()
-    } yield {
-      get
-    }
-
-    println("$$$$$$$$$$$$")
-    throw cmdResult.unsafeRunSync().left.value
-    cmdResult.unsafeRunSync().right.value shouldEqual REInt(1)
   }
 }

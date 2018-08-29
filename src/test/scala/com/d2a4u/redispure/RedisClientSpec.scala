@@ -4,6 +4,7 @@ import java.nio.channels.AsynchronousChannelGroup
 import java.util.concurrent.Executors
 
 import cats.effect.IO
+import com.d2a4u.redispure.clients.AsyncRedisClient
 import com.d2a4u.redispure.commands.connection._
 import com.d2a4u.redispure.resp._
 import com.d2a4u.redispure.commands.strings._
@@ -17,7 +18,7 @@ class RedisClientSpec extends FlatSpec with Matchers with EitherValues with Befo
   val RedisPort = 6379
   val es = Executors.newCachedThreadPool()
   implicit val acg = AsynchronousChannelGroup.withThreadPool(es)
-  implicit val client = RedisClient[IO]("localhost", RedisPort)
+  implicit val client = AsyncRedisClient[IO]("localhost", RedisPort)
 
   override def beforeEach(): Unit = {
     super.beforeEach()
