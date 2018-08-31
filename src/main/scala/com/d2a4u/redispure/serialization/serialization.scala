@@ -2,64 +2,59 @@ package com.d2a4u.redispure.serialization
 
 import java.nio.charset.StandardCharsets
 
-import com.d2a4u.redispure.models._
-import cats.implicits._
+import com.d2a4u.redispure.DecodingFailure
 import com.d2a4u.redispure.resp._
+import fs2.Chunk
 
-abstract class SerializationException(message: String) extends Exception(message)
-
-object SerializationException {
-  def apply(err: Throwable): SerializationException = new SerializationException(err.getMessage) {}
+trait Encoder[T] {
+  def encode(t: T): String
 }
-case class EncoderException(message: String) extends SerializationException(message)
-case class DecoderException(message: String) extends SerializationException(message)
 
-case class Encoder[T](encode: T => Either[EncoderException, String])
-case class Decoder[T](decode: String => Either[DecoderException, T])
+trait Decoder[T] {
+  def decode(value: String): Either[DecodingFailure, T]
+  def decode(value: Chunk[Byte]): Either[DecodingFailure, T]
+}
 
-object Encoder extends Encoders {
+object Encoder {
   def apply[T]()(implicit encoder: Encoder[T]): Encoder[T] = encoder
-}
 
-trait Encoders {
-  implicit val strEnc: Encoder[String] = Encoder(_.asRight)
-  implicit val intEnc: Encoder[Int] = Encoder(_.toString.asRight)
-  implicit val doubleEnc: Encoder[Double] = Encoder(_.toString.asRight)
-  implicit val longEnc: Encoder[Long] = Encoder(_.toString.asRight)
+  def instance[T](func: T => String): Encoder[T] = new Encoder[T] {
+    override def encode(t: T): String = func(t)
+  }
 
-  implicit val reIntEnc: Encoder[REInt] = Encoder(t => s":${t.value}\r\n".asRight)
-  implicit val reErrorEnc: Encoder[REError] = Encoder(t => s"-${t.`type`} ${t.message}\r\n".asRight)
-  implicit val reBulkStringEnc: Encoder[REBulkString] = Encoder {
+  implicit val strEnc: Encoder[String] = Encoder.instance(identity)
+  implicit val intEnc: Encoder[Int] = Encoder.instance(_.toString)
+  implicit val doubleEnc: Encoder[Double] = Encoder.instance(_.toString)
+  implicit val longEnc: Encoder[Long] = Encoder.instance(_.toString)
+
+  implicit val reIntEnc: Encoder[REInt] = Encoder.instance(t => s":${t.value}\r\n")
+  implicit val reErrorEnc: Encoder[REError] = Encoder.instance(t => s"-${t.`type`} ${t.message}\r\n")
+  implicit val reBulkStringEnc: Encoder[REBulkString] = Encoder.instance {
     case RENullString =>
-      "$-1\r\n".asRight
+      "$-1\r\n"
 
     case str: REString =>
-      s"$$${str.value.getBytes(StandardCharsets.UTF_8).length}\r\n${str.value}\r\n".asRight
+      s"$$${str.value.getBytes(StandardCharsets.UTF_8).length}\r\n${str.value}\r\n"
   }
-  implicit val reSimpleStringEnc: Encoder[RESimpleString.type] = Encoder(_ => s"+OK\r\n".asRight)
-  implicit val reArrayEnc: Encoder[REArray] = Encoder(t => {
-    def encode(array: REArray): Either[EncoderException, String] = {
+  implicit val reSimpleStringEnc: Encoder[RESimpleString.type] = Encoder.instance(_ => s"+OK\r\n")
+  implicit val reArrayEnc: Encoder[REArray] = Encoder.instance(t => {
+    def encode(array: REArray): String = {
       array match {
         case RENullArray =>
-          "*-1\r\n".asRight
+          "*-1\r\n"
 
         case arr: RENeArray =>
           val parsedRESP = arr.elems.map {
-            case r: REInt => implicitly[Encoder[REInt]].encode(r)
-            case r: REError => implicitly[Encoder[REError]].encode(r)
-            case r: REBulkString => implicitly[Encoder[REBulkString]].encode(r)
-            case r: RESimpleString.type => implicitly[Encoder[RESimpleString.type]].encode(r)
+            case r: REInt => Encoder[REInt].encode(r)
+            case r: REError => Encoder[REError].encode(r)
+            case r: REBulkString => Encoder[REBulkString].encode(r)
+            case r: RESimpleString.type => Encoder[RESimpleString.type].encode(r)
             case r: REArray => encode(r)
-            case r: RESP => EncoderException(s"Could not find encoder for $r").asLeft
+            case _: RESP => ""
           }
-          val result: Either[EncoderException, Array[String]] =
-            parsedRESP.foldRight(Right(Array.empty): Either[EncoderException, Array[String]]) { (e, acc) =>
-              for {
-                strArr <- acc.right
-                str <- e.right
-              } yield str +: strArr
-            }
-          result.map(arr => s"*${arr.length}\r\n" + arr.mkString)
+          val result: Array[String] =
+            parsedRESP.foldRight(Array.empty[String])(_ +: _)
+          s"*${result.length}\r\n" + result.mkString
       }
     }
     encode(t)

@@ -1,22 +1,39 @@
-package com.d2a4u.redispure
+package com.d2a4u.redispure.clients
 
 import java.net.InetSocketAddress
 import java.nio.channels.AsynchronousChannelGroup
 
-import cats.effect._
+import cats.effect.Effect
 import com.d2a4u.redispure.resp.RESP
 import fs2.io.tcp
 import fs2.io.tcp.Socket
 import fs2.{Chunk, Pipe, Stream}
 
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 
-case class RedisClient(
-  host: String,
-  port: Int,
-  timeout: Int = 5 //seconds
-)(implicit AG: AsynchronousChannelGroup, ec: ExecutionContext) {
+trait RedisClient[F[_]] {
 
+  val host: String
+  val port: Int
+  val timeout: Option[FiniteDuration] = None
+  implicit val AG: AsynchronousChannelGroup
+  implicit val ec: ExecutionContext
+
+  /** TypeByte is a representation of Redis's RESP data type.
+    * In RESP, the type of some data depends on the first byte:
+    * For Simple Strings the first byte of the reply is "+"
+    * For Errors the first byte of the reply is "-"
+    * For Integers the first byte of the reply is ":"
+    * For Bulk Strings the first byte of the reply is "$"
+    * For Arrays the first byte of the reply is "*"
+    *
+    * NonEmptyArrayTypeByte represents an Array data type, this type
+    * is special because we then need to read the data from socket
+    * recurrsively because an array can have multiple types
+    *
+    * NonEmptySimpleTypeByte represents all other RESP type
+    */
   sealed trait TypeByte
   case class NonEmptySimpleTypeByte(index: Int, value: Byte) extends TypeByte
   case class NonEmptyArrayTypeByte(index: Int) extends TypeByte
@@ -24,20 +41,29 @@ case class RedisClient(
 
   val CRLF: Array[Byte] = Array(13, 10)
 
-  def send[F[_]](cmd: String, bufferSize: Int = 128 * 1024)(implicit F: Effect[F]): Stream[F, Chunk[Byte]] = {
+  protected var socket: Socket[F] = _
+
+  def send(cmd: String, bufferSize: Int = 128 * 1024)(implicit F: Effect[F]): Stream[F, Chunk[Byte]] = {
     for {
       address <- Stream(new InetSocketAddress(host, port))
       sock <- tcp.client[F](address)
       _ <- write(sock, cmd)
       firstLine <- nextLine(sock)
       values <- readAll(sock, firstLine, bufferSize)
-    } yield values
+    } yield {
+      socket = sock
+      values
+    }
   }
 
-  private def write[F[_]](socket: Socket[F], cmd: String): Stream[F, Unit] =
+  def close()(implicit F: Effect[F]): F[Unit] =
+    if (socket != null) socket.close
+    else F.unit
+
+  protected def write(socket: Socket[F], cmd: String): Stream[F, Unit] =
     Stream.eval(socket.write(Chunk.array(cmd.getBytes)))
 
-  private def readAll[F[_]](
+  protected def readAll(
     socket: Socket[F],
     firstLine: Chunk[Byte],
     bufferSize: Int = 128 * 1024
@@ -52,7 +78,7 @@ case class RedisClient(
     }
   }
 
-  private def readSimple[F[_]](socket: Socket[F], firstLine: Chunk[Byte], bufferSize: Int)(
+  protected def readSimple(socket: Socket[F], firstLine: Chunk[Byte], bufferSize: Int)(
     index: Int,
     byte: Byte
   ): Stream[F, Chunk[Byte]] = {
@@ -64,11 +90,11 @@ case class RedisClient(
     Stream(firstLine).covary[F] ++ readNext
   }
 
-  private def readArray[F[_]](socket: Socket[F], firstLine: Chunk[Byte], bufferSize: Int): Stream[F, Chunk[Byte]] = {
+  protected def readArray(socket: Socket[F], firstLine: Chunk[Byte], bufferSize: Int): Stream[F, Chunk[Byte]] = {
     val numElems = numberOfElemsToReadNext(firstLine)
     val readNext = if (numElems > 0) {
-      val readElem: Pipe[F, Int, Chunk[Byte]] = { in =>
-        in.flatMap { _ =>
+      val readElem: Pipe[F, Int, Chunk[Byte]] = { inStream =>
+        inStream.flatMap { _ =>
           for {
             line <- nextLine(socket)
             values <- readAll(socket, line, bufferSize)
@@ -82,9 +108,9 @@ case class RedisClient(
     Stream(firstLine).covary[F] ++ readNext
   }
 
-  private def extractTypeByte(firstLine: Chunk[Byte]): TypeByte = {
+  protected def extractTypeByte(firstLine: Chunk[Byte]): TypeByte = {
     (for {
-      index <- firstLine.indexWhere(RESP.AllTypeBytes.contains(_))
+      index <- firstLine.indexWhere(RESP.AllTypeBytes.contains)
       typeByte = firstLine(index)
     } yield {
       if (typeByte == RESP.ArrayCharByte) NonEmptyArrayTypeByte(index)
@@ -92,14 +118,14 @@ case class RedisClient(
     }).getOrElse(EmptyTypeByte)
   }
 
-  private def nextLine[F[_]](socket: Socket[F]): Stream[F, Chunk[Byte]] = {
+  protected def nextLine(socket: Socket[F]): Stream[F, Chunk[Byte]] = {
     val maybeFirstLine = for {
-      line <- Stream.eval(socket.readN(1)).repeat.takeThrough {
+      line <- Stream.eval(socket.readN(1, timeout)).repeat.takeThrough {
         case Some(data) =>
           !data.head.contains(RESP.CRLF(0))
 
         case None => true
-      } ++ Stream.eval(socket.readN(1))
+      } ++ Stream.eval(socket.readN(1, timeout))
     } yield line
 
     /* have to unwrap Chunk into array and wrap it back into Chunk
@@ -112,18 +138,18 @@ case class RedisClient(
     }
   }
 
-  private def readN[F[_]](socket: Socket[F], numBytes: Int, bufferSize: Int): Stream[F, Chunk[Byte]] = {
+  protected def readN(socket: Socket[F], numBytes: Int, bufferSize: Int): Stream[F, Chunk[Byte]] = {
     val read = {
       if (bufferSize > numBytes) {
-        Stream.eval(socket.readN(numBytes))
+        Stream.eval(socket.readN(numBytes, timeout))
       } else {
-        Stream.eval(socket.readN(bufferSize)).repeat.take(numBytes)
+        Stream.eval(socket.readN(bufferSize, timeout)).repeat.take(numBytes)
       }
     }
     read.map(_.getOrElse(Chunk.empty))
   }
 
-  private def numberOfBytesToReadNext(firstLine: Chunk[Byte])(typeByteAt: Int, charByte: Byte): Int = {
+  protected def numberOfBytesToReadNext(firstLine: Chunk[Byte])(typeByteAt: Int, charByte: Byte): Int = {
     (for {
       foundCRByteAt <- firstLine.indexWhere(_ == RESP.CRLF(0))
     } yield {
@@ -134,13 +160,15 @@ case class RedisClient(
           numBytes + 2
         } else 0
       } else {
-        // Simple String or Integer or ErrorChar
+        /* Simple String or Integer or ErrorChar has all info in 1 line, hence,
+         * we do not need to read more data
+         */
         0
       }
     }).getOrElse(0)
   }
 
-  private def numberOfElemsToReadNext(firstLine: Chunk[Byte]): Int = {
+  protected def numberOfElemsToReadNext(firstLine: Chunk[Byte]): Int = {
     (for {
       typeByteAt <- firstLine.indexWhere(_ == RESP.ArrayCharByte)
       foundCRByteAt <- firstLine.indexWhere(_ == RESP.CRLF(0))
